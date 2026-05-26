@@ -1,0 +1,5 @@
+# Project nay chay bang Python standard library, khong bat buoc cai them thu vien.
+# Neu muon mo rong theo huong TensorFlow/Matplotlib/Streamlit, co the cai rieng:
+# tensorflow
+# matplotlib
+# streamlit
