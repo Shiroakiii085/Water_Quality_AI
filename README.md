@@ -7,10 +7,10 @@ Project cho Đề tài 13: phân loại đa lớp 4 mức chất lượng nướ
 - Tạo dữ liệu mô phỏng 10.000 dòng và gán nhãn theo ngưỡng.
 - One-hot encoding cho 4 lớp: `Tốt`, `Trung bình`, `Kém`, `Nguy hiểm`.
 - Chuẩn hóa đầu vào bằng `StandardScaler` tự cài đặt.
-- Huấn luyện 3 kiến trúc ANN:
-  - `8 -> 32 -> 4`
-  - `8 -> 64 -> 32 -> 4`
-  - `8 -> 128 -> 64 -> 4`
+- Huấn luyện 3 kiến trúc ANN (100 epochs):
+  - `8 -> 32 -> 4` — **98.60%**
+  - `8 -> 64 -> 32 -> 4` — **99.75%**
+  - `8 -> 128 -> 64 -> 4` — **99.90%**
 - Lớp đầu ra Softmax, loss categorical cross-entropy.
 - So sánh accuracy trên tập test.
 - Xuất biểu đồ loss/accuracy ra file HTML.
