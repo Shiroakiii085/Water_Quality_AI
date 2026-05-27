@@ -6,17 +6,19 @@ from pathlib import Path
 from typing import Iterable
 
 
+# Danh sách 8 chỉ số hóa học và vi sinh dùng để đánh giá chất lượng nước
 FEATURES = [
     "pH",
-    "Hardness",
-    "Solids",
-    "Chlorine",
-    "Sulfate",
-    "Lead",
-    "Mercury",
-    "Coliform",
+    "Hardness",   # Độ cứng (mg/L)
+    "Solids",     # Chất rắn hòa tan tổng số (mg/L)
+    "Chlorine",   # Hàm lượng clo (mg/L)
+    "Sulfate",    # Hàm lượng sunfat (mg/L)
+    "Lead",       # Hàm lượng chì - Pb (mg/L)
+    "Mercury",    # Hàm lượng thủy ngân - Hg (mg/L)
+    "Coliform",   # Mật độ vi khuẩn Coliform (CFU/100mL)
 ]
 
+# Nhãn hiển thị tiếng Việt cho từng chỉ số (dùng trong giao diện và CLI)
 FEATURE_LABELS = {
     "pH": "pH",
     "Hardness": "Độ cứng (mg/L)",
@@ -28,10 +30,12 @@ FEATURE_LABELS = {
     "Coliform": "Coliform (CFU/100mL)",
 }
 
+# 4 lớp chất lượng nước đầu ra
 LABELS = ["Tốt", "Trung bình", "Kém", "Nguy hiểm"]
 
 
 def _round_row(row: dict[str, float]) -> dict[str, float]:
+    # Làm tròn các giá trị theo độ chính xác phù hợp cho từng chỉ số
     return {
         "pH": round(row["pH"], 2),
         "Hardness": round(row["Hardness"], 1),
@@ -45,72 +49,81 @@ def _round_row(row: dict[str, float]) -> dict[str, float]:
 
 
 def assess_quality(row: dict[str, float]) -> str:
-    """Assign water quality labels using transparent threshold rules.
+    """Gán nhãn chất lượng nước dựa trên bộ luật ngưỡng (rule-based scoring).
 
-    The thresholds are simplified for an academic exercise. They combine mild
-    deviations and serious safety indicators into four classes.
+    Hệ thống tính điểm tích lũy (score) và kiểm tra điều kiện nguy hiểm (danger).
+    Các ngưỡng được đơn giản hóa cho mục đích học tập.
     """
     score = 0
     danger = False
 
+    # pH: giá trị lý tưởng 6.5-8.5
     ph = row["pH"]
-    if ph < 5.0 or ph > 10.5:
+    if ph < 5.0 or ph > 10.5:       # Quá chua hoặc quá kiềm -> nguy hiểm
         danger = True
-    elif ph < 5.5 or ph > 9.5:
+    elif ph < 5.5 or ph > 9.5:      # Lệch nhiều -> +2 điểm
         score += 2
-    elif ph < 6.5 or ph > 8.5:
+    elif ph < 6.5 or ph > 8.5:      # Lệch nhẹ -> +1 điểm
         score += 1
 
+    # Độ cứng: nước cứng ảnh hưởng đến sinh hoạt
     hardness = row["Hardness"]
     if hardness > 500:
         score += 2
     elif hardness > 300:
         score += 1
 
+    # Chất rắn hòa tan: TDS cao gây vị khó chịu
     solids = row["Solids"]
     if solids > 1500:
         score += 2
     elif solids > 700:
         score += 1
 
+    # Clo dư: quá nhiều hoặc quá ít đều không tốt
     chlorine = row["Chlorine"]
-    if chlorine > 5.0:
+    if chlorine > 5.0:               # Clo quá cao -> nguy hiểm
         danger = True
     elif chlorine < 0.1 or chlorine > 3.0:
         score += 1
 
+    # Sunfat: nồng độ cao gây mùi vị khó chịu
     sulfate = row["Sulfate"]
-    if sulfate > 1000:
+    if sulfate > 1000:               # Sunfat quá cao -> nguy hiểm
         danger = True
     elif sulfate > 500:
         score += 2
     elif sulfate > 250:
         score += 1
 
+    # Chì: kim loại nặng độc hại
     lead = row["Lead"]
-    if lead > 0.05:
+    if lead > 0.05:                  # Chì quá cao -> nguy hiểm
         danger = True
     elif lead > 0.015:
         score += 2
     elif lead > 0.01:
         score += 1
 
+    # Thủy ngân: kim loại nặng cực độc
     mercury = row["Mercury"]
-    if mercury > 0.01:
+    if mercury > 0.01:               # Thủy ngân quá cao -> nguy hiểm
         danger = True
     elif mercury > 0.004:
         score += 2
     elif mercury > 0.002:
         score += 1
 
+    # Vi khuẩn Coliform: chỉ thị ô nhiễm vi sinh
     coliform = row["Coliform"]
-    if coliform > 1000:
+    if coliform > 1000:              # Coliform quá cao -> nguy hiểm
         danger = True
     elif coliform > 200:
         score += 2
     elif coliform > 50:
         score += 1
 
+    # Phân loại cuối cùng dựa trên tổng điểm và cờ danger
     if danger or score >= 10:
         return "Nguy hiểm"
     if score >= 6:
@@ -121,6 +134,7 @@ def assess_quality(row: dict[str, float]) -> str:
 
 
 def _base_good(rng: random.Random) -> dict[str, float]:
+    # Tạo mẫu nước "tốt" - tất cả chỉ số trong ngưỡng an toàn
     return {
         "pH": rng.uniform(6.7, 8.2),
         "Hardness": rng.uniform(80, 220),
@@ -134,6 +148,7 @@ def _base_good(rng: random.Random) -> dict[str, float]:
 
 
 def _mild_value(feature: str, rng: random.Random) -> float:
+    # Sinh giá trị "cảnh báo nhẹ" (mild) cho một chỉ số
     values = {
         "pH": lambda: rng.choice([rng.uniform(6.0, 6.45), rng.uniform(8.55, 9.1)]),
         "Hardness": lambda: rng.uniform(305, 430),
@@ -148,6 +163,7 @@ def _mild_value(feature: str, rng: random.Random) -> float:
 
 
 def _bad_value(feature: str, rng: random.Random) -> float:
+    # Sinh giá trị "xấu" (bad) cho một chỉ số
     values = {
         "pH": lambda: rng.choice([rng.uniform(5.1, 5.45), rng.uniform(9.6, 10.3)]),
         "Hardness": lambda: rng.uniform(510, 720),
@@ -162,6 +178,7 @@ def _bad_value(feature: str, rng: random.Random) -> float:
 
 
 def _danger_value(feature: str, rng: random.Random) -> float:
+    # Sinh giá trị "nguy hiểm" (danger) cho một chỉ số
     values = {
         "pH": lambda: rng.choice([rng.uniform(3.4, 4.9), rng.uniform(10.7, 12.0)]),
         "Hardness": lambda: rng.uniform(700, 1000),
@@ -176,16 +193,19 @@ def _danger_value(feature: str, rng: random.Random) -> float:
 
 
 def _sample_for_label(label: str, rng: random.Random) -> dict[str, float]:
+    # Sinh một mẫu dữ liệu cho một lớp cụ thể
     row = _base_good(rng)
     if label == "Tốt":
         return _round_row(row)
 
     if label == "Trung bình":
+        # Chọn 2-3 chỉ số, gán giá trị mild
         for feature in rng.sample(FEATURES, rng.choice([2, 3])):
             row[feature] = _mild_value(feature, rng)
         return _round_row(row)
 
     if label == "Kém":
+        # Chọn 3-4 chỉ số gán bad, 35% thêm 1 chỉ số mild
         bad_features = rng.sample(FEATURES, rng.choice([3, 4]))
         for feature in bad_features:
             row[feature] = _bad_value(feature, rng)
@@ -195,6 +215,7 @@ def _sample_for_label(label: str, rng: random.Random) -> dict[str, float]:
             row[feature] = _mild_value(feature, rng)
         return _round_row(row)
 
+    # Nguy hiểm: 1 chỉ số danger làm trigger + 1-3 chỉ số phụ ngẫu nhiên
     trigger = rng.choice(["pH", "Chlorine", "Sulfate", "Lead", "Mercury", "Coliform"])
     row[trigger] = _danger_value(trigger, rng)
     for feature in rng.sample([feature for feature in FEATURES if feature != trigger], rng.choice([1, 2, 3])):
@@ -203,6 +224,8 @@ def _sample_for_label(label: str, rng: random.Random) -> dict[str, float]:
 
 
 def generate_dataset(samples_per_class: int = 120, seed: int = 13) -> list[dict[str, float | str]]:
+    # Sinh toàn bộ dataset (mặc định 120 mẫu/lớp, 4 lớp = 480 mẫu)
+    # Mỗi mẫu sau khi sinh được kiểm tra lại bằng assess_quality() để đảm bảo khớp nhãn
     rng = random.Random(seed)
     rows: list[dict[str, float | str]] = []
 
@@ -213,6 +236,8 @@ def generate_dataset(samples_per_class: int = 120, seed: int = 13) -> list[dict[
             attempts += 1
             row = _sample_for_label(label, rng)
             assigned = assess_quality(row)
+            # Nếu luật đánh giá khớp với nhãn mong muốn thì chấp nhận
+            # Nếu thử quá số lần cho phép thì chấp nhận luôn (tránh vô hạn)
             if assigned == label or attempts > samples_per_class * 80:
                 item: dict[str, float | str] = dict(row)
                 item["Quality"] = assigned
@@ -224,6 +249,7 @@ def generate_dataset(samples_per_class: int = 120, seed: int = 13) -> list[dict[
 
 
 def save_dataset_csv(path: str | Path, samples_per_class: int = 120, seed: int = 13) -> None:
+    # Sinh dataset và lưu ra file CSV
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = generate_dataset(samples_per_class=samples_per_class, seed=seed)
@@ -234,6 +260,7 @@ def save_dataset_csv(path: str | Path, samples_per_class: int = 120, seed: int =
 
 
 def load_dataset_csv(path: str | Path) -> tuple[list[list[float]], list[str]]:
+    # Đọc file CSV, trả về (X: list[list[float]], y: list[str])
     x: list[list[float]] = []
     y: list[str] = []
     with Path(path).open("r", newline="", encoding="utf-8") as file:
@@ -250,6 +277,8 @@ def stratified_split(
     test_size: float = 0.2,
     seed: int = 13,
 ) -> tuple[list[list[float]], list[list[float]], list[str], list[str]]:
+    # Phân chia dữ liệu train/test theo phương pháp stratified
+    # (giữ nguyên tỷ lệ các lớp trong cả hai tập)
     rng = random.Random(seed)
     groups: dict[str, list[int]] = {label: [] for label in LABELS}
     for index, label in enumerate(y):
@@ -274,6 +303,7 @@ def stratified_split(
 
 
 def label_counts(labels: Iterable[str]) -> dict[str, int]:
+    # Đếm số lượng mẫu theo từng nhãn (dùng để kiểm tra phân phối dữ liệu)
     counts = {label: 0 for label in LABELS}
     for label in labels:
         counts[label] += 1

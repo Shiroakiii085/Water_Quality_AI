@@ -16,11 +16,13 @@ from water_quality_ann.preprocessing import StandardScaler, argmax
 
 
 def load_scaler(path: Path) -> StandardScaler:
+    # Đọc tham số chuẩn hóa từ file JSON
     with path.open("r", encoding="utf-8") as file:
         return StandardScaler.from_dict(json.load(file))
 
 
 def parse_args() -> argparse.Namespace:
+    # Nhập 8 chỉ số nước từ dòng lệnh để dự đoán
     parser = argparse.ArgumentParser(description="Predict water quality from chemical and microbiological indicators.")
     parser.add_argument("--pH", type=float, required=True)
     parser.add_argument("--Hardness", type=float, required=True)
@@ -39,13 +41,17 @@ def main() -> None:
     if not model_path.exists() or not scaler_path.exists():
         raise SystemExit("Chưa có model. Hãy chạy: python train.py")
 
+    # Đọc model và scaler đã huấn luyện
     args = parse_args()
     row = [getattr(args, feature) for feature in FEATURES]
     model = SimpleANN.load(model_path)
     scaler = load_scaler(scaler_path)
+
+    # Dự đoán: chuẩn hóa -> forward pass -> argmax -> nhãn
     probabilities = model.predict_proba(scaler.transform_row(row))
     label = LABELS[argmax(probabilities)]
 
+    # In kết quả
     print("Chỉ số đầu vào:")
     for feature, value in zip(FEATURES, row):
         print(f"  {FEATURE_LABELS[feature]}: {value}")

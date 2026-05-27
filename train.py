@@ -18,14 +18,16 @@ from water_quality_ann.data import FEATURES, LABELS, label_counts, load_dataset_
 from water_quality_ann.preprocessing import StandardScaler, one_hot_many
 
 
+# Định nghĩa 3 kiến trúc ANN sẽ được huấn luyện và so sánh
 ARCHITECTURES = [
-    ("ANN_1lop_32", [32]),
-    ("ANN_2lop_64_32", [64, 32]),
-    ("ANN_2lop_128_64", [128, 64]),
+    ("ANN_1lop_32", [32]),          # 1 lớp ẩn, 32 neuron
+    ("ANN_2lop_64_32", [64, 32]),   # 2 lớp ẩn, 64 và 32 neuron
+    ("ANN_2lop_128_64", [128, 64]), # 2 lớp ẩn, 128 và 64 neuron
 ]
 
 
 class ResultRow(TypedDict):
+    # Kiểu dữ liệu lưu kết quả so sánh giữa các mô hình
     model: str
     architecture: str
     test_loss: float
@@ -33,16 +35,19 @@ class ResultRow(TypedDict):
 
 
 def _format_percent(value: float) -> str:
+    # Chuyển số thập phân (0.9271) thành chuỗi phần trăm ("92.71%")
     return f"{value * 100:.2f}%"
 
 
 def _save_json(path: Path, payload: Mapping[str, object]) -> None:
+    # Lưu dữ liệu ra file JSON (dùng cho scaler và model)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)
 
 
 def _save_metrics_csv(path: Path, histories: dict[str, list[dict[str, float]]]) -> None:
+    # Lưu loss/accuracy theo từng epoch ra file CSV để phân tích sau
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
@@ -56,6 +61,7 @@ def _save_metrics_csv(path: Path, histories: dict[str, list[dict[str, float]]]) 
 
 
 def _save_comparison_csv(path: Path, results: list[ResultRow]) -> None:
+    # Lưu bảng so sánh kết quả cuối cùng của 3 mô hình
     with path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=["model", "architecture", "test_loss", "test_accuracy"])
         writer.writeheader()
@@ -64,6 +70,12 @@ def _save_comparison_csv(path: Path, results: list[ResultRow]) -> None:
 
 
 def _chart(series: dict[str, list[float]], title: str, y_min: float | None = None, y_max: float | None = None) -> str:
+    """Vẽ biểu đồ dạng SVG bằng tay (không dùng thư viện đồ họa).
+
+    series: dict{tên đường: [giá trị theo epoch]}
+    Trả về mã HTML/SVG nhúng được.
+    """
+    # Kích thước biểu đồ và padding
     width = 520
     height = 260
     padding_left = 46
@@ -74,6 +86,7 @@ def _chart(series: dict[str, list[float]], title: str, y_min: float | None = Non
     plot_height = height - padding_top - padding_bottom
     colors = ["#0f766e", "#f59e0b", "#dc2626", "#2563eb"]
 
+    # Tính min/max cho trục Y
     all_values = [value for values in series.values() for value in values]
     if not all_values:
         return ""
@@ -82,11 +95,13 @@ def _chart(series: dict[str, list[float]], title: str, y_min: float | None = Non
     if abs(max_value - min_value) < 1e-9:
         max_value = min_value + 1.0
 
+    # Hàm chuyển đổi (epoch, value) thành tọa độ (x, y) trên SVG
     def point(index: int, value: float, total: int) -> tuple[float, float]:
         x = padding_left + (index / max(total - 1, 1)) * plot_width
         y = padding_top + (1 - (value - min_value) / (max_value - min_value)) * plot_height
         return x, y
 
+    # Tạo các đường polyline và chú thích (legend)
     polylines = []
     legends = []
     for color_index, (name, values) in enumerate(series.items()):
@@ -101,6 +116,7 @@ def _chart(series: dict[str, list[float]], title: str, y_min: float | None = Non
 
     y_label_top = f"{max_value:.2f}"
     y_label_bottom = f"{min_value:.2f}"
+    # Trả về đoạn SVG hoàn chỉnh
     return f"""
     <svg viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">
       <rect x="0" y="0" width="{width}" height="{height}" rx="10" fill="#ffffff" />
@@ -116,6 +132,7 @@ def _chart(series: dict[str, list[float]], title: str, y_min: float | None = Non
 
 
 def _render_report(path: Path, results: list[ResultRow], histories: dict[str, list[dict[str, float]]]) -> None:
+    # Sinh báo cáo HTML hoàn chỉnh: bảng so sánh + biểu đồ loss/accuracy
     best = max(results, key=lambda row: float(row["test_accuracy"]))
     result_rows = "\n".join(
         "<tr>"
@@ -129,6 +146,7 @@ def _render_report(path: Path, results: list[ResultRow], histories: dict[str, li
 
     cards = []
     for model_name, rows in histories.items():
+        # Biểu đồ loss
         loss_chart = _chart(
             {
                 "Train loss": [row["train_loss"] for row in rows],
@@ -136,6 +154,7 @@ def _render_report(path: Path, results: list[ResultRow], histories: dict[str, li
             },
             f"Loss - {model_name}",
         )
+        # Biểu đồ accuracy
         accuracy_chart = _chart(
             {
                 "Train acc": [row["train_accuracy"] for row in rows],
@@ -147,6 +166,7 @@ def _render_report(path: Path, results: list[ResultRow], histories: dict[str, li
         )
         cards.append(f"<section class='chart-card'>{loss_chart}{accuracy_chart}</section>")
 
+    # Template HTML
     html_content = f"""<!doctype html>
 <html lang="vi">
 <head>
@@ -255,18 +275,24 @@ def _render_report(path: Path, results: list[ResultRow], histories: dict[str, li
 
 
 def run_training(args: argparse.Namespace) -> None:
+    # Pipeline chính của quá trình huấn luyện
     data_path = ROOT / "data" / "water_quality.csv"
+    # Bước 1: Tạo dữ liệu nếu chưa có
     if args.regenerate or not data_path.exists():
         save_dataset_csv(data_path, samples_per_class=args.samples_per_class, seed=args.seed)
 
+    # Bước 2: Đọc dữ liệu và phân chia train/test theo stratified split
     x, y = load_dataset_csv(data_path)
     x_train, x_test, y_train_labels, y_test_labels = stratified_split(x, y, test_size=0.2, seed=args.seed)
+
+    # Bước 3: Chuẩn hóa dữ liệu và mã hóa nhãn
     scaler = StandardScaler.fit(x_train)
     x_train_scaled = scaler.transform(x_train)
     x_test_scaled = scaler.transform(x_test)
     y_train = one_hot_many(y_train_labels)
     y_test = one_hot_many(y_test_labels)
 
+    # Lưu scaler để dùng cho dự đoán sau này
     _save_json(ROOT / "models" / "scaler.json", scaler.to_dict())
 
     results: list[ResultRow] = []
@@ -277,6 +303,7 @@ def run_training(args: argparse.Namespace) -> None:
     print("Test label counts:", label_counts(y_test_labels))
     print()
 
+    # Bước 4: Huấn luyện từng kiến trúc và lưu kết quả
     for index, (model_name, hidden_layers) in enumerate(ARCHITECTURES, start=1):
         print(f"Training {model_name}: hidden_layers={hidden_layers}")
         model = SimpleANN(
@@ -284,7 +311,7 @@ def run_training(args: argparse.Namespace) -> None:
             hidden_layers=hidden_layers,
             output_size=len(LABELS),
             learning_rate=args.learning_rate,
-            seed=args.seed + index,
+            seed=args.seed + index,  # Seed khác nhau cho mỗi model
         )
         history = model.fit(x_train_scaled, y_train, x_test_scaled, y_test, epochs=args.epochs, seed=args.seed + index * 10)
         test_loss, test_accuracy = model.evaluate(x_test_scaled, y_test)
@@ -300,11 +327,13 @@ def run_training(args: argparse.Namespace) -> None:
         model.save(ROOT / "models" / f"{model_name}.json")
         print(f"  test_loss={test_loss:.4f}, test_accuracy={_format_percent(test_accuracy)}")
 
+    # Bước 5: Chọn mô hình tốt nhất (test accuracy cao nhất)
     best_result = max(results, key=lambda row: float(row["test_accuracy"]))
     best_model_name = str(best_result["model"])
     best_model = SimpleANN.load(ROOT / "models" / f"{best_model_name}.json")
     best_model.save(ROOT / "models" / "best_model.json")
 
+    # Bước 6: Lưu báo cáo và số liệu
     _save_metrics_csv(ROOT / "outputs" / "training_metrics.csv", histories)
     _save_comparison_csv(ROOT / "outputs" / "model_comparison.csv", results)
     _render_report(ROOT / "outputs" / "training_report.html", results, histories)
@@ -317,12 +346,13 @@ def run_training(args: argparse.Namespace) -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    # Xử lý tham số dòng lệnh cho phép tùy chỉnh quá trình huấn luyện
     parser = argparse.ArgumentParser(description="Train ANN models for domestic water quality classification.")
-    parser.add_argument("--epochs", type=int, default=35)
-    parser.add_argument("--samples-per-class", type=int, default=2500)
-    parser.add_argument("--learning-rate", type=float, default=0.018)
-    parser.add_argument("--seed", type=int, default=13)
-    parser.add_argument("--regenerate", action="store_true", help="Regenerate the synthetic dataset before training.")
+    parser.add_argument("--epochs", type=int, default=35, help="Số epoch huấn luyện (mặc định: 35)")
+    parser.add_argument("--samples-per-class", type=int, default=2500, help="Số mẫu mỗi lớp (mặc định: 2500)")
+    parser.add_argument("--learning-rate", type=float, default=0.018, help="Tốc độ học (mặc định: 0.018)")
+    parser.add_argument("--seed", type=int, default=13, help="Seed cho tính tái lập (mặc định: 13)")
+    parser.add_argument("--regenerate", action="store_true", help="Tạo lại dữ liệu synthetic trước khi huấn luyện")
     return parser.parse_args()
 
 
